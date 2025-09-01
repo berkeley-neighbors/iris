@@ -2,7 +2,7 @@ FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && apt-get -y dist-upgrade \
-    && apt-get -y install libffi-dev libsasl2-dev python3-dev libyaml-dev sudo \
+    && apt-get -y install libffi-dev libsasl2-dev libxml2 libxslt1-dev python3-dev libyaml-dev sudo \
         libldap2-dev libssl-dev python3-pip python3-setuptools python3-venv \
     mysql-client nginx uwsgi uwsgi-plugin-python3 uwsgi-plugin-gevent-python3 \
     && pip3 install mysql-connector-python \
