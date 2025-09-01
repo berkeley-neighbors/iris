@@ -9,6 +9,11 @@ services:
       - DOCKER_DB_BOOTSTRAP=1
       - IRIS_CFG_DB_HOST=iris-mysql
       - IRIS_CFG_DB_PASSWORD=1234
+      - ONCALL_API=http://oncall:8080
+      - ONCALL_KEY=magic
+      - ONCALL_APP=oncall
+      
+      
     depends_on:
       - iris-mysql
     volumes:

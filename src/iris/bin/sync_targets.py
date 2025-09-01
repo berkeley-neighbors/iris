@@ -24,6 +24,8 @@ import ldap
 from ldap.controls import SimplePagedResultsControl
 from ldap.filter import escape_filter_chars
 import time
+from os import environ
+
 ldap_pagination_size = None
 ldap_timeout = None
 update_sleep = None
@@ -165,13 +167,13 @@ def fetch_users_from_oncall(oncall):
 
 def sync_from_oncall(config, engine, purge_old_users=True):
     # users and teams present in our oncall database
-    oncall_base_url = config.get('oncall-api')
+    oncall_base_url = environ.get('ONCALL_API')
 
     if not oncall_base_url:
         logger.error('Missing URL to oncall-api, which we use for user/team lookups. Bailing.')
         return
 
-    oncall = oncallclient.OncallClient(config.get('oncall-app', ''), config.get('oncall-key', ''), oncall_base_url)
+    oncall = oncallclient.OncallClient(environ.get('ONCALL_APP'), environ.get('ONCALL_KEY'), oncall_base_url)
     oncall_users = fetch_users_from_oncall(oncall)
 
     if not oncall_users:

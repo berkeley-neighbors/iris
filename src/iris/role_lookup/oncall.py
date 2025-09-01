@@ -6,6 +6,7 @@ import logging
 from iris.metrics import stats
 import oncallclient
 from iris.role_lookup import IrisRoleLookupException
+from os import environ
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +15,14 @@ class oncall(object):
     def __init__(self, config):
         headers = requests.utils.default_headers()
         headers['User-Agent'] = 'iris role lookup (%s)' % headers.get('User-Agent')
-        app = config.get('oncall-app', '')
-        key = config.get('oncall-key', '')
+        app = environ.get('ONCALL_APP')
+        key = environ.get('ONCALL_KEY')
         self.requests = requests.session()
         if app and key:
             self.requests.auth = oncallclient.OncallAuth(app, key)
         oncallclient.OncallAuth(app, key)
         self.requests.headers = headers
-        self.endpoint = config['oncall-api'] + '/api/v0'
+        self.endpoint = environ.get('ONCALL_API') + '/api/v0'
 
     def call_oncall(self, url, expected_type):
         url = str(self.endpoint + url)
