@@ -33,7 +33,7 @@ prod:
     req-logger: file:/home/iris/var/log/uwsgi/access.log
 
     # error log
-    logger: file:/home/iris/var/log/uwsgi/error.log
+    #logger: file:/home/iris/var/log/uwsgi/error.log
 
     # put timestamp in the error log
     logdate: true
