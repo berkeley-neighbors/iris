@@ -1207,7 +1207,7 @@ class Plans(object):
             query = query + ' WHERE ' + ' AND '.join(where)
 
         if query_limit is not None:
-            query += ' ORDER BY `plan`.`created` DESC LIMIT %s' % query_limit
+            query += ' ORDER BY `created` DESC LIMIT %s' % query_limit
 
         cursor.execute(query)
 
@@ -1547,7 +1547,7 @@ class Incidents(object):
         if where:
             query = query + ' WHERE ' + ' AND '.join(where)
         if query_limit is not None:
-            query += ' ORDER BY `incident`.`created` DESC, `incident`.`id` DESC LIMIT %s' % query_limit
+            query += ' ORDER BY `created` DESC, `id` DESC LIMIT %s' % query_limit
 
         cursor = connection.cursor(db.ss_dict_cursor)
         cursor.execute(query, sql_values)
