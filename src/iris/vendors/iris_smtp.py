@@ -139,13 +139,12 @@ class iris_smtp(object):
         else:
             for mx in self.mx_sorted:
                 try:
+                    print(mx)
                     if self.config.get('use_ssl', False):
-                        smtp = SMTP_SSL(timeout=self.smtp_timeout)
+                        smtp = SMTP_SSL(mx[1],self.config.get('port', 25),timeout=self.smtp_timeout)
                     else:
-                        smtp = SMTP(timeout=self.smtp_timeout)
+                        smtp = SMTP(mx[1], self.config.get('port', 25),timeout=self.smtp_timeout)
                         
-                    smtp.connect(mx[1], self.config.get('port', 25))
-                    
                     if self.config.get('use_tls', False):
                         smtp.starttls()
                         
@@ -175,8 +174,15 @@ class iris_smtp(object):
             # giving up
             for mx in self.mx_sorted:
                 try:
-                    smtp = SMTP(timeout=self.smtp_timeout)
-                    smtp.connect(mx[1], 25)
+                    print(mx)
+                    if self.config.get('use_ssl', False):
+                        smtp = SMTP_SSL(mx[1],self.config.get('port', 25),timeout=self.smtp_timeout)
+                    else:
+                        smtp = SMTP(mx[1], self.config.get('port', 25),timeout=self.smtp_timeout)
+                        
+                    if self.config.get('use_tls', False):
+                        smtp.starttls()
+                        
                     conn = smtp
                     self.last_conn = conn
                     self.last_conn_server = mx[1]
