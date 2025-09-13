@@ -870,30 +870,21 @@ class AuthMiddleware(object):
 class ACLMiddleware(object):
     def __init__(self, config):
         self.config = config
-        
+
     def process_resource(self, req, resp, resource, params):
-        auth_module = AUTH_TYPE_TO_MODULE.get(os.environ.get('AUTH_METHOD', 'debug'))
-        auth = importlib.import_module(auth_module)
-        auth_manager = getattr(auth, 'Authenticator')(self.config)
-        
-        self.process_frontend_routes(req, resource, auth_manager)
+        self.process_frontend_routes(req, resource)
         self.process_admin_acl(req, resource, params)
         self.load_user_settings(req)
 
-    def process_frontend_routes(self, req, resource, auth_manager):
+    def process_frontend_routes(self, req, resource):
         if req.context['username']:
             # Logged in and looking at /login page? Redirect to home.
             if req.path == '/login':
                 raise HTTPFound(ui.default_route)
-        else:
-            user = auth_manager.authenticate(req)
-            
-            if user:
-                req.context['username'] = user
-                
+        else:   
             # If we're not logged in and this is a frontend route, we're only allowed
             # to view the login form
-            elif getattr(resource, 'frontend_route', False):
+            if getattr(resource, 'frontend_route', False):
                 if req.path != '/login':
                     raise HTTPFound(ui.login_url(req))
 

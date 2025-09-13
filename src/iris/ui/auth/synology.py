@@ -11,8 +11,7 @@ class Authenticator:
 
     def authenticate(self, req):
         logger.info(f'Authenticating with Synology SSO')
-        session = req.env['beaker.session']
-        access_token = session.get('accessToken')
+        access_token = req.context['accessToken']
         
         if not access_token:
             return False

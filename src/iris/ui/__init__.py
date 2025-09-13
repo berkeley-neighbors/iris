@@ -348,16 +348,18 @@ class Login():
 class AuthResponse():
     allow_read_no_auth = True
 
+    def __init__(self, auth_manager):
+        self.auth_manager = auth_manager
+
     def on_get(self, req, resp):
         logger.info("Handling auth response request")
         
-        session = req.env['beaker.session']
-
         q_token = req.get_param('token')
             
         if q_token:
-            session['accessToken'] = q_token
-            session.save()
+            req.context['accessToken'] = q_token # to normalize args to various authenticate methods
+            username = self.auth_manager.authenticate(req)
+            auth.login_user(req, username)
             raise HTTPFound('/')
         else:
             raise HTTPBadRequest('Invalid login attempt', 'Missing token')
@@ -501,7 +503,7 @@ def init(config, app):
     app.add_route('/user/', User())
     app.add_route('/validate/jinja', JinjaValidate())
     app.add_route('/unsubscribe/{application}', Unsubscribe())
-    app.add_route('/auth-response', AuthResponse())
+    app.add_route('/auth-response', AuthResponse(auth_manager))
 
     if(qr_base_url and qr_login_url):
         create_qr_code(qr_base_url, qr_login_url)
