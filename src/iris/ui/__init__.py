@@ -23,6 +23,11 @@ _filename_ascii_strip_re = re.compile(r'[^A-Za-z0-9_.-]')
 
 ui_root = os.environ.get('STATIC_ROOT', os.path.abspath(os.path.dirname(__file__)))
 
+AUTH_TYPE_TO_MODULE = {
+    'debug': 'iris.ui.auth.noauth',
+    'synology': 'iris.ui.auth.synology',
+    'ldap': 'iris.ui.auth.ldap'
+}
 
 assets_env = AssetsEnvironment(os.path.join(ui_root, 'static'), url='/static')
 
@@ -295,34 +300,36 @@ class Login():
     allow_read_no_auth = False
     frontend_route = True
 
-    def __init__(self, auth_manager, debug):
+    def __init__(self, auth_manager):
         self.auth_manager = auth_manager
-        self.debug = debug
 
     def on_get(self, req, resp):
         resp.content_type = 'text/html'
+        auth_type = os.environ.get('AUTH_METHOD', 'debug')
+        
+        if auth_type == 'synology':
+            extensions = {
+                'synology_sdk_url': os.environ.get('SYNOLOGY_SDK_URL'),
+                'oauthserver_url': os.environ.get('SYNOLOGY_OAUTH_URL'),
+                'synology_app_id': os.environ.get('SYNOLOGY_APP_ID'),
+                'redirect_uri': os.environ.get('SYNOLOGY_REDIRECT_URI'),
+            }
+            
         resp.body = jinja2_env.get_template('login.html').render(request=req,
                                                                  path='login',
-                                                                 last_flash=get_flash(req))
+                                                                 last_flash=get_flash(req),
+                                                                 auth_type=auth_type,
+                                                                 **extensions)
 
     def on_post(self, req, resp):
         form_body = uri.parse_query_string(req.context['body'].decode('utf-8'))
 
         try:
             username = form_body['username']
-            password = form_body['password']
         except KeyError:
             raise HTTPFound('/login')
 
-        if not auth.valid_username(username):
-            logger.warning('Tried to login with invalid username %s', username)
-            if self.debug:
-                flash_message(req, 'Invalid username', 'danger')
-            else:
-                flash_message(req, 'Invalid credentials', 'danger')
-            raise HTTPFound('/login')
-
-        if self.auth_manager.authenticate(username, password):
+        if self.auth_manager.authenticate(req):
             logger.info('Successful login for %s', username)
             auth.login_user(req, username)
         else:
@@ -338,6 +345,22 @@ class Login():
         else:
             raise HTTPBadRequest('Invalid next parameter', '')
 
+class AuthResponse():
+    allow_read_no_auth = True
+
+    def on_get(self, req, resp):
+        logger.info("Handling auth response request")
+        
+        session = req.env['beaker.session']
+
+        q_token = req.get_param('token')
+            
+        if q_token:
+            session['accessToken'] = q_token
+            session.save()
+            raise HTTPFound('/')
+        else:
+            raise HTTPBadRequest('Invalid login attempt', 'Missing token')
 
 class Logout():
     allow_read_no_auth = False
@@ -448,13 +471,12 @@ class JinjaValidate():
 def init(config, app):
     global local_api_url
     logger.info('Web asset root: "%s"', ui_root)
-    auth_module = config.get('auth', {'module': 'iris.ui.auth.noauth'})['module']
+    auth_module = AUTH_TYPE_TO_MODULE.get(os.environ.get('AUTH_METHOD', 'debug'))
     auth = importlib.import_module(auth_module)
     auth_manager = getattr(auth, 'Authenticator')(config)
     qr_base_url = config.get('qr_base_url')
     qr_login_url = config.get('qr_login_url')
 
-    debug = config['server'].get('disable_auth', False) is True
     local_api_url = config['server'].get('local_api_url', 'http://localhost:16649')
 
     app.add_route('/static/bundles/{filename}', StaticResource('/static/bundles'))
@@ -474,11 +496,12 @@ def init(config, app):
     app.add_route('/templates/{template}', Template())
     app.add_route('/applications/', Applications())
     app.add_route('/applications/{application}', Application())
-    app.add_route('/login/', Login(auth_manager, debug))
+    app.add_route('/login/', Login(auth_manager))
     app.add_route('/logout/', Logout())
     app.add_route('/user/', User())
     app.add_route('/validate/jinja', JinjaValidate())
     app.add_route('/unsubscribe/{application}', Unsubscribe())
+    app.add_route('/auth-response', AuthResponse())
 
     if(qr_base_url and qr_login_url):
         create_qr_code(qr_base_url, qr_login_url)

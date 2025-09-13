@@ -94,9 +94,9 @@ def get_predefined_users(config):
         users[user['name']] = user
         for key in ('sms', 'call'):
             try:
-                users[user['name']][key] = normalize_phone_number(users[user['name']][key])
+                users[user['name']]['contacts'][key] = normalize_phone_number(users[user['name']][key])
             except (NumberParseException, KeyError, AttributeError):
-                users[user['name']][key] = None
+                users[user['name']]['contacts'][key] = None
 
     return users
 
@@ -155,9 +155,9 @@ def fix_user_contacts(contacts):
 
 
 def fetch_users_from_oncall(oncall):
-    oncall_user_endpoint = oncall.url + 'users?fields=name&fields=contacts&fields=active'
+    oncall_user_endpoint = oncall.url + 'users?fields=name&fields=contacts&fields=active&fields=god'
     try:
-        return {user['name']: fix_user_contacts(user['contacts'])
+        return {user['name']: {"contacts":fix_user_contacts(user['contacts']), "admin": user['god']}
                 for user in oncall.get(oncall_user_endpoint).json()
                 if user['active']}
     except (ValueError, KeyError, requests.exceptions.RequestException):
@@ -236,7 +236,7 @@ def sync_from_oncall(config, engine, purge_old_users=True):
     iris_team_names = {name.lower() for (name, ) in engine.execute('''SELECT `name` FROM `target` WHERE `type_id` = %s''', target_types['team'])}
     target_add_sql = 'INSERT INTO `target` (`name`, `type_id`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `active` = TRUE'
     oncall_add_sql = 'INSERT INTO `oncall_team` (`target_id`, `oncall_team_id`) VALUES (%s, %s)'
-    user_add_sql = 'INSERT IGNORE INTO `user` (`target_id`) VALUES (%s)'
+    user_add_sql = 'INSERT IGNORE INTO `user` (`target_id`, `god`) VALUES (%s, %s)'
     target_contact_add_sql = '''INSERT INTO `target_contact` (`target_id`, `mode_id`, `destination`)
                                 VALUES (%s, %s, %s)
                                 ON DUPLICATE KEY UPDATE `destination` = %s'''
@@ -248,14 +248,14 @@ def sync_from_oncall(config, engine, purge_old_users=True):
         logger.info('Inserting %s', username)
         try:
             target_id = engine.execute(target_add_sql, (username, target_types['user'])).lastrowid
-            engine.execute(user_add_sql, (target_id, ))
+            engine.execute(user_add_sql, (target_id, oncall_users[username]['admin']))
         except SQLAlchemyError as e:
             metrics.incr('users_failed_to_add')
             metrics.incr('sql_errors')
             logger.exception('Failed to add user %s' % username)
             continue
         metrics.incr('users_added')
-        for key, value in oncall_users[username].items():
+        for key, value in oncall_users[username]['contacts'].items():
             if value and key in modes:
                 logger.info('%s: %s -> %s', username, key, value)
                 try:
@@ -267,6 +267,7 @@ def sync_from_oncall(config, engine, purge_old_users=True):
 
     # update users that need to be
     contact_update_sql = 'UPDATE target_contact SET destination = %s WHERE target_id = (SELECT id FROM target WHERE name = %s AND type_id = %s) AND mode_id = %s'
+    god_update_sql = 'UPDATE user SET admin = %s WHERE target_id = %s'
     contact_insert_sql = 'INSERT INTO target_contact (target_id, mode_id, destination) VALUES ((SELECT id FROM target WHERE name = %s AND type_id = %s), %s, %s)'
     contact_delete_sql = 'DELETE FROM target_contact WHERE target_id = (SELECT id FROM target WHERE name = %s AND type_id = %s) AND mode_id = %s'
 
@@ -275,7 +276,9 @@ def sync_from_oncall(config, engine, purge_old_users=True):
         sleep(update_sleep)
         try:
             db_contacts = iris_users[username]
-            oncall_contacts = oncall_users[username]
+            oncall_contacts = oncall_users[username]['contacts']
+            engine.execute(god_update_sql, (oncall_users[username]['admin'], username))
+
             for mode in modes:
                 if mode in oncall_contacts and oncall_contacts[mode]:
                     if mode in db_contacts:

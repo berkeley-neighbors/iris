@@ -4,6 +4,7 @@
 import logging
 import ldap
 import os
+from falcon.util import uri
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,15 @@ class Authenticator:
 
         self.user_suffix = config['auth'].get('ldap_user_suffix')
 
-    def ldap_auth(self, username, password):
+    def ldap_auth(self, req):
+        form_body = uri.parse_query_string(req.context['body'].decode('utf-8'))
+
+        try:
+            username = form_body['username']
+            password = form_body['password']
+        except KeyError:
+            return False
+        
         if self.cert_path:
             ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, self.cert_path)
         connection = ldap.initialize(self.ldap_url)

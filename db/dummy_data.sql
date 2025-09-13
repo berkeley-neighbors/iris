@@ -161,6 +161,8 @@ LOCK TABLES `response` WRITE;
 UNLOCK TABLES;
 
 LOCK TABLES `target` WRITE;
+
+/* id name type_id active */
 INSERT INTO `target` VALUES
     (1,'demo',1,1),
     (2,'abc',1,1),

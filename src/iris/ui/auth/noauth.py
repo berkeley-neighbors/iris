@@ -6,5 +6,5 @@ class Authenticator:
     def __init__(self, config):
         pass
 
-    def authenticate(self, username, password):
+    def authenticate(self, req):
         return True

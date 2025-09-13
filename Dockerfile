@@ -19,12 +19,14 @@ WORKDIR /home/iris
 
 RUN chown -R iris:iris /home/iris/source /var/log/nginx /var/lib/nginx \
     && sudo -Hu iris mkdir -p /home/iris/var/log/uwsgi /home/iris/var/log/nginx /home/iris/var/run /home/iris/var/relay \
-    && sudo -Hu iris python3 -m venv /home/iris/env \
-    && sudo -Hu iris /bin/bash -c 'source /home/iris/env/bin/activate && python3 -m pip install -U pip wheel && cd /home/iris/source && pip install .'
+    && sudo -Hu iris python3 -m venv /home/iris/env
+    
+RUN --mount=type=cache,target=/root/.cache/pip sudo -Hu iris /bin/bash -c 'source /home/iris/env/bin/activate && python3 -m pip install -U pip wheel && cd /home/iris/source && pip install .'
 
 COPY ops/config/systemd /etc/systemd/system
 COPY ops/daemons /home/iris/daemons
 COPY ops/daemons/uwsgi-docker.yaml /home/iris/daemons/uwsgi.yaml
+COPY ops/db /home/iris/db
 COPY db /home/iris/db
 COPY configs /home/iris/config
 COPY healthcheck /tmp/status

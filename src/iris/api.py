@@ -1,5 +1,6 @@
 # Copyright (c) LinkedIn Corporation. All rights reserved. Licensed under the BSD-2 Clause license.
 # See LICENSE in the project root for license information.
+import importlib
 from gevent import spawn, sleep, socket, Timeout, monkey
 monkey.patch_all() # NOQA
 
@@ -69,6 +70,11 @@ operators = {
 def ts_to_sql_datetime(ts):
     return 'FROM_UNIXTIME(%s)' % ts
 
+AUTH_TYPE_TO_MODULE = {
+    'debug': 'iris.ui.auth.noauth',
+    'synology': 'iris.ui.auth.synology',
+    'ldap': 'iris.ui.auth.ldap'
+}
 
 filter_escaped_value_transforms = {
     'updated': ts_to_sql_datetime,
@@ -768,52 +774,6 @@ class ReqBodyMiddleware(object):
 
 
 class AuthMiddleware(object):
-    def __init__(self, debug=False):
-        if debug:
-            self.process_resource = self.debug_auth
-
-    def debug_auth(self, req, resp, resource, params):
-        req.context['username'] = req.env.get('beaker.session', {}).get('user', None)
-        method = req.method
-
-        if resource.allow_read_no_auth and method == 'GET':
-            return
-
-        # If we're authenticated using beaker, don't validate app as if this is an
-        # API call, but set 'app' to the internal iris user as some routes (test incident creation)
-        # need it.
-        if req.context['username']:
-            req.context['app'] = cache.applications.get('iris')
-            return
-
-        # For the purpose of e2etests, allow setting username via header, rather than going
-        # through beaker
-        username_header = req.get_header('X-IRIS-USERNAME')
-        if username_header:
-            req.context['username'] = username_header
-            return
-
-        # If this is a frontend route, and we're not logged in, don't fall through to process as
-        # an app. This will allow the ACLMiddleware to force the login page.
-        if getattr(resource, 'frontend_route', False):
-            return
-
-        # Proceed with authenticating this route as a third party application
-        try:
-            # Ignore HMAC requirements for custom webhooks
-            if req.env['PATH_INFO'].startswith('/v0/webhooks/'):
-                app = req.get_param('application', required=True)
-            else:
-                app, client_digest = req.get_header('AUTHORIZATION', '')[5:].split(':', 1)
-
-            if app not in cache.applications:
-                logger.warning('Tried authenticating with nonexistent app: "%s"', app)
-                raise HTTPUnauthorized('Authentication failure',
-                                       'Application not found', [])
-            req.context['app'] = cache.applications[app]
-        except TypeError:
-            return
-
     def process_resource(self, req, resp, resource, params):  # pragma: no cover
         req.context['username'] = req.env.get('beaker.session', {}).get('user', None)
         method = req.method
@@ -908,23 +868,32 @@ class AuthMiddleware(object):
 
 
 class ACLMiddleware(object):
-    def __init__(self, debug):
-        pass
-
+    def __init__(self, config):
+        self.config = config
+        
     def process_resource(self, req, resp, resource, params):
-        self.process_frontend_routes(req, resource)
+        auth_module = AUTH_TYPE_TO_MODULE.get(os.environ.get('AUTH_METHOD', 'debug'))
+        auth = importlib.import_module(auth_module)
+        auth_manager = getattr(auth, 'Authenticator')(self.config)
+        
+        self.process_frontend_routes(req, resource, auth_manager)
         self.process_admin_acl(req, resource, params)
         self.load_user_settings(req)
 
-    def process_frontend_routes(self, req, resource):
+    def process_frontend_routes(self, req, resource, auth_manager):
         if req.context['username']:
             # Logged in and looking at /login page? Redirect to home.
             if req.path == '/login':
                 raise HTTPFound(ui.default_route)
         else:
+            user = auth_manager.authenticate(req)
+            
+            if user:
+                req.context['username'] = user
+                
             # If we're not logged in and this is a frontend route, we're only allowed
             # to view the login form
-            if getattr(resource, 'frontend_route', False):
+            elif getattr(resource, 'frontend_route', False):
                 if req.path != '/login':
                     raise HTTPFound(ui.login_url(req))
 
@@ -5412,13 +5381,13 @@ def json_error_serializer(req, resp, exception):
     resp.content_type = 'application/json'
 
 
-def construct_falcon_api(debug, healthcheck_path, allowed_origins, iris_sender_app,
+def construct_falcon_api(healthcheck_path, allowed_origins, iris_sender_app,
                          zk_hosts, default_sender_addr, supported_timezones, config):
     cors = CORS(allow_origins_list=allowed_origins)
     api = API(middleware=[
         ReqBodyMiddleware(),
-        AuthMiddleware(debug=debug),
-        ACLMiddleware(debug=debug),
+        AuthMiddleware(),
+        ACLMiddleware(config),
         HeaderMiddleware(),
         cors.middleware
     ])
@@ -5519,10 +5488,6 @@ def get_api(config):
     allowed_origins = config.get('allowed_origins', [])
     iris_sender_app = config['sender'].get('sender_app')
 
-    debug = False
-    if config['server'].get('disable_auth'):
-        debug = True
-
     default_leader_sender = config['sender'].get('leader_sender', config['sender'])
     default_leader_sender_addr = (default_leader_sender['host'], default_leader_sender['port'])
     zk_hosts = config['sender'].get('zookeeper_cluster', False)
@@ -5530,7 +5495,7 @@ def get_api(config):
 
     # all notifications go through leader sender for now
     app = construct_falcon_api(
-        debug, healthcheck_path, allowed_origins, iris_sender_app, zk_hosts, default_leader_sender_addr, supported_timezones, config)
+        healthcheck_path, allowed_origins, iris_sender_app, zk_hosts, default_leader_sender_addr, supported_timezones, config)
 
     # Need to call this after all routes have been created
     app = ui.init(config, app)
