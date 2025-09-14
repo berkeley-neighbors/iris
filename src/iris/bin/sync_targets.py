@@ -236,7 +236,7 @@ def sync_from_oncall(config, engine, purge_old_users=True):
     iris_team_names = {name.lower() for (name, ) in engine.execute('''SELECT `name` FROM `target` WHERE `type_id` = %s''', target_types['team'])}
     target_add_sql = 'INSERT INTO `target` (`name`, `type_id`) VALUES (%s, %s) ON DUPLICATE KEY UPDATE `active` = TRUE'
     oncall_add_sql = 'INSERT INTO `oncall_team` (`target_id`, `oncall_team_id`) VALUES (%s, %s)'
-    user_add_sql = 'INSERT IGNORE INTO `user` (`target_id`, `god`) VALUES (%s, %s)'
+    user_add_sql = 'INSERT IGNORE INTO `user` (`target_id`, `admin`) VALUES (%s, %s)'
     target_contact_add_sql = '''INSERT INTO `target_contact` (`target_id`, `mode_id`, `destination`)
                                 VALUES (%s, %s, %s)
                                 ON DUPLICATE KEY UPDATE `destination` = %s'''
