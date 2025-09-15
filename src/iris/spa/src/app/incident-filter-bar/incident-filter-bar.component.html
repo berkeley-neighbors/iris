@@ -1,0 +1,60 @@
+<form>
+  <div class="row py-4 bg-info-subtle">
+    <div class="col">
+      <label for="status" class="form-label" i18n>Status</label>
+      <select id="status" class="form-select">
+        <option value="all" i18n>All</option>
+        <option value="open" i18n>Open</option>
+        <option value="in-progress" i18n>In Progress</option>
+        <option value="closed" i18n>Closed</option>
+      </select>
+    </div>
+    <div class="col">
+      <label for="exampleFormControlInput1" class="form-label">Target</label>
+      <input
+        type="email"
+        class="form-control"
+        id="exampleFormControlInput1"
+        placeholder="name@example.com"
+      />
+    </div>
+    <div class="col">
+      <label for="exampleFormControlInput2" class="form-label">Owner</label>
+      <input type="email" class="form-control" id="exampleFormControlInput2" />
+    </div>
+    <div class="col">
+      <label for="application" class="form-label" i18n>Application</label>
+      <select id="application" class="form-select">
+        <option value="all" i18n>All</option>
+        <option value="open" i18n>Open</option>
+        <option value="in-progress" i18n>In Progress</option>
+        <option value="closed" i18n>Closed</option>
+      </select>
+    </div>
+    <div class="col">
+      <label for="startDateFormControlInput" class="form-label" i18n
+        >Start Date</label
+      >
+      <div class="input-group">
+        <input
+          id="startDateFormControlInput"
+          class="form-control"
+          placeholder="yyyy-mm-dd"
+          name="dp"
+          [(ngModel)]="model"
+          ngbDatepicker
+          #d="ngbDatepicker"
+        />
+        <button
+          class="btn btn-outline-secondary bi bi-calendar3"
+          (click)="d.toggle()"
+          type="button"
+        ></button>
+      </div>
+    </div>
+    <div class="col-1">
+      <button class="btn btn-primary mt-4" i18n>Submit</button>
+    </div>
+  </div>
+  <div class="row"></div>
+</form>
